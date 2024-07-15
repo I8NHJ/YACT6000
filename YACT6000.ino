@@ -1,12 +1,8 @@
-// YACT6000 - Yet Another Cw Toll for FlexRadio 6X00 series in remote
+// YACT6000 - Yet Another Cw Tool for using FlexRadio 6X00/8X00 remotelly
 // Ver 0.1 N5NHJ 4/24
 //
-#include <SD.h>
-#include "NativeEthernet.h"
-// #include <EEPROM.h>
-// #define DEBUG
-#define BAUD_RATE 115200
 
+// #define DEBUG
 #ifdef DEBUG 
   #define debug(x)                        Serial.print(x)
   #define debugln(x)                      Serial.println(x)
@@ -19,11 +15,27 @@
   #define debugf4(Str, A, B, C, D)
 #endif
 
+#include <SD.h>
+#include "NativeEthernet.h"
+// #include <EEPROM.h>
+
+/* SIDETONE VARIABLE DEFINITIONS */
+//#define AUDIOSYNT                                                     //High definition audiolibrary to be used instead of the Tone function to generate Sidetone.
+//#ifdef AUDIOSYNT
+  #include <Audio.h>
+  AudioSynthWaveform SideTone;
+  AudioOutputPWM Speaker (1,2);                                        //PWM pins output for audio
+  AudioConnection patchCord0 (SideTone, Speaker);
+//#else
+//  const int Speaker            = 1;                                   //34
+//#endif
+
+#define BAUD_RATE 115200
+
 /* GLOBAL VARIABLE DEFINITIONS */
 const int chipSelect = BUILTIN_SDCARD;
 const int BuiltInLED         = LED_BUILTIN;
 const int KeyInPin           = 0; //33
-const int Speaker            = 1; //34
 
 unsigned long TimeIt;
 char Rchar;
@@ -62,6 +74,17 @@ void setup() {
     }
   }
   #endif
+
+  //#ifdef AUDIOSYNT
+    AudioMemory (8);
+    SideTone.begin(0.0, STFreq, WAVEFORM_SINE);                                    //SINE, PULSE, SAWTOOTH, SQUARE, TRIANGLE
+  //#else
+  //  pinMode(Speaker,OUTPUT);
+  //#endif
+  
+  pinMode(KeyInPin, INPUT_PULLUP);
+  pinMode(BuiltInLED, OUTPUT);
+
   getConfigFile();
   getIpAddress(); 
 
@@ -74,65 +97,127 @@ void setup() {
     debugf4 ("Flex IP: %u.%u.%u.%u\n", FlexIP[0], FlexIP[1], FlexIP[2], FlexIP[3]);
   // }
 
-  pinMode(KeyInPin, INPUT_PULLUP);
-  pinMode(BuiltInLED, OUTPUT);
-  pinMode(Speaker,OUTPUT);
   send_K();
-
 } //END setup()
 
 void loop() {
-  if (digitalRead(KeyInPin)) {//It is high, I'm not transmitting
+  if (digitalRead(KeyInPin)) {                                        //It is high, I'm not transmitting
     if (PreviousKeying) {
       PreviousKeying = false;
-      digitalWrite(BuiltInLED, LOW);    // LED off
+      digitalWrite(BuiltInLED, LOW);                                  // LED off
       debugln("RX");
-      if (ST) {noTone(Speaker);}
+      if (ST) {
+        //#ifdef AUDIOSYNT
+          SideTone.amplitude(0);
+        //#else
+        //  noTone(Speaker);
+        //#endif
+      }
     }
     else {
     }
   }
-  else {  //It is low, I'm transmitting
+  else {                                                              //It is low, I'm transmitting
     if (PreviousKeying) {
     }
     else {
       PreviousKeying = true;
-      if (ST) {tone(Speaker,STFreq);} 
-      digitalWrite(BuiltInLED, HIGH);   // LED on
+      if (ST) {
+        //#ifdef AUDIOSYNT
+          SideTone.amplitude(1.0);
+        //#else
+        //  tone(Speaker,STFreq);
+        //#endif
+      } 
+      digitalWrite(BuiltInLED, HIGH);                                 // LED on
       debugln("TX");
     }
   }
 } //END loop()
 
 //---------------------------------------------
-void send_K() { // _._
-  tone (Speaker, 600);
-  delay (90);
-  noTone(Speaker);
-  delay (30);
-  tone (Speaker, 600);
-  delay (30);
-  noTone(Speaker);
-  delay (30);
-  tone (Speaker, 600);
-  delay (90);
-  noTone(Speaker);
+// Element (dot) length = 60000 (milliseconds in a minute) / (50 (elements of the world PARIS) * Speed (word per minute))
+// @20WMP: 60000 / (50*20) = 60ms
+// @30WPM: 60000 / (50*30) = 40ms
+// @40WPM: 60000 / (50*40) = 30ms
+void send_dot(int speed) {
+
+}
+void send_dash(int speed) {
+
+}
+void send_element_space(int speed) {
+
+}
+void send_letter_space (int speed){
+
+}
+void send_word_space (int speed){
+
 }
 
-void send_C() { // _._.
-  tone (Speaker, 600);
+void send_K() {                                                       // _._ at speed of 40WPM
+  //#ifdef AUDIOSYNT
+    SideTone.frequency(600.0);
+    SideTone.amplitude(1.0);
+  //#else
+  //  tone (Speaker, 600);
+  //#endif
   delay (90);
-  noTone(Speaker);
+
+  //#ifdef AUDIOSYNT
+    SideTone.amplitude(0.0);
+  //#else
+  //  noTone(Speaker);
+  //#endif
   delay (30);
-  tone (Speaker, 600);
+
+  //#ifdef AUDIOSYNT
+    SideTone.amplitude(1.0);
+  //#else
+  //  tone (Speaker, 600);
+  //#endif
   delay (30);
-  noTone(Speaker);
+
+  //#ifdef AUDIOSYNT
+    SideTone.amplitude(0.0);
+  //#else
+  //  noTone(Speaker);
+  //#endif
   delay (30);
-  tone (Speaker, 600);
+
+  //#ifdef AUDIOSYNT
+    SideTone.amplitude(1.0);
+  //#else
+  //  tone (Speaker, 600);
+  //#endif
   delay (90);
-  noTone(Speaker);
+
+  //#ifdef AUDIOSYNT
+    SideTone.amplitude(0);
+    SideTone.frequency(STFreq);
+  //#else
+  //  noTone(Speaker);
+  //#endif
+  }
+
+void send_C_tone() {                                                  // _._.
+  //#ifdef AUDIOSYNT
+  //#else
+  //  tone (Speaker, 600);
+  delay (90);
+  //noTone(Speaker);
   delay (30);
-  tone (Speaker, 600);
+  //tone (Speaker, 600);
   delay (30);
-  noTone(Speaker);
+  //noTone(Speaker);
+  delay (30);
+  //tone (Speaker, 600);
+  delay (90);
+  //noTone(Speaker);
+  delay (30);
+  //tone (Speaker, 600);
+  delay (30);
+  //noTone(Speaker);
+  //#endif
 }
