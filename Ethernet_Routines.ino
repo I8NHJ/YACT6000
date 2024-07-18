@@ -1,7 +1,7 @@
 /*********************** getIpAddress *********************/
 void getIpAddress()
 {
-  // uint8_t St=0;
+  uint8_t St=0;
   // start the Ethernet connection:
   debugln("=== Waiting for IP address");
 

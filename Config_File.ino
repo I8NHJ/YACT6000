@@ -72,7 +72,14 @@ void ParseInBuf() {
   if (InBuf.indexOf("FLEXIP:") >= 0 && InSetup) {
     InBuf = InBuf.substring(InBuf.indexOf("FLEXIP:") + 8);
     ParseIP(InBuf, FlexIP);
+    RadioIP = {FlexIP[0], FlexIP[1], FlexIP[2], FlexIP[3]};
     debugf4("Parsed FlexIP:  %u.%u.%u.%u\n", FlexIP[0],FlexIP[1],FlexIP[2],FlexIP[3]);
+    return;
+  }
+  if (InBuf.indexOf("FLEXPORT:") >= 0 && InSetup) {
+    tmpStr = InBuf.substring(InBuf.indexOf("FLEXPORT:") + 10);
+    FlexPort = tmpStr.toInt();
+    debug("Parsed FlexPort: "); debugln(FlexPort);
     return;
   }
   if (InBuf.indexOf("STATIC IP:") >= 0 && InSetup) {
