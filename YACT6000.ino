@@ -49,15 +49,18 @@ EthernetClient RadioUDPChannel;
 String RadioUDPBuffer;
 EthernetUDP VITA49;
 char VITA49Buffer[UDP_TX_PACKET_MAX_SIZE];
+char handle[9];
 
 /* GLOBAL VARIABLE DEFINITIONS */
 const int chipSelect         = BUILTIN_SDCARD;
 const int BuiltInLED         = LED_BUILTIN;
 const int KeyInPin           = 0; //33
-unsigned long CWIndex        = 0;
-unsigned long SEQ            = 0;
+unsigned long CWIndex        = 1;
+unsigned long SEQ            = 1;
 String ConnectionHandle;
 
+unsigned int PingInterval = 1000;
+unsigned long LastPing;
 unsigned long TimeIt;
 char Rchar;
 String InBuf;
@@ -112,41 +115,42 @@ void setup() {
   digitalWrite(BuiltInLED, HIGH);
 
   getConfigFile();
-  getIpAddress(); 
-  // if (Ethernet.linkStatus() == 1) {
-    debugf6 ("Teensy MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", MyMAC[0], MyMAC[1], MyMAC[2], MyMAC[3], MyMAC[4], MyMAC[5]);
-                                        debugf4 ("Teensy MASK: %u.%u.%u.%u\n", MyMask[0], MyMask[1], MyMask[2], MyMask[3]);
-    debugf4 ("Teensy GATEWAY: %u.%u.%u.%u\n", MyGateway[0], MyGateway[1], MyGateway[2], MyGateway[3]);
-    debugf4 ("Teensy DNS: %u.%u.%u.%u\n", MyDNS[0], MyDNS[1], MyDNS[2], MyDNS[3]);
-    debugf4 ("Flex IP: %u.%u.%u.%u\n", FlexIP[0], FlexIP[1], FlexIP[2], FlexIP[3]);
-  // }
+  getIpAddress();
+
+  debugf4 ("Teensy IP: %u.%u.%u.%u\n", MyIP[0], MyIP[1], MyIP[2], MyIP[3]);
+  debugf6 ("Teensy MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", MyMAC[0], MyMAC[1], MyMAC[2], MyMAC[3], MyMAC[4], MyMAC[5]);
+  debugf4 ("Teensy MASK: %u.%u.%u.%u\n", MyMask[0], MyMask[1], MyMask[2], MyMask[3]);
+  debugf4 ("Teensy GATEWAY: %u.%u.%u.%u\n", MyGateway[0], MyGateway[1], MyGateway[2], MyGateway[3]);
+  debugf4 ("Teensy DNS: %u.%u.%u.%u\n", MyDNS[0], MyDNS[1], MyDNS[2], MyDNS[3]);
+  debugf4 ("Flex IP: %u.%u.%u.%u\n", FlexIP[0], FlexIP[1], FlexIP[2], FlexIP[3]);
 
   while (!FlexConnected) {
-  debugln("Connecting Radio");
-  FlexConnected=connect(RadioIP, FlexPort);
+    debugln("Connecting Radio");
+    FlexConnected=connect(RadioIP, FlexPort);
+    delay(3000); //Wait 3 second if both connected or not connected yet. 
   }
-  ipAddress=RadioIP;
+
+  //ipAddress=RadioIP;
   //FlexRadio.connect();
-  debugln("Radio connected");
-  digitalWrite(BuiltInLED, LOW);
+
+  ConnectionHandle=getHandler();
+  debugln(ConnectionHandle);
+  FlexInit();
   send_K();
+  digitalWrite(BuiltInLED, LOW);
+
+  debugln("Radio connected");
+
 } //END setup()
 
 void loop() {
   if (digitalRead(KeyInPin)) {                                        //It is high, I'm not transmitting
     if (PreviousKeying) {
-      RadioCommand="C" + String(SEQ) + "|cw key immediate 0\n";
-      //RadioTCPChannel.write(RadioCommand, sizeof(RadioCommand));
-      RadioTCPChannel.print(RadioCommand);
-      //FlexRadio.send("C" + String(SEQ) + "|cw key immediate 0\n");
+      RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 0\n";
+      //RadioCommand="C"+ String(SEQ).trim() + "|cw key 0 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ConnectionHandle.trim() + "\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
       CWIndex++;
       SEQ++;
-      // FlexRadio.send("C" + String(SEQ) + "|cw ptt 0 time=0x" + String(millis() % 0xFFFF, HEX) + " index=" + String(CWIndex) + " client_handle=0x" + FlexRadio.handle + "\n");
-      // CWIndex++;
-      // SEQ++;
-      // FlexRadio.send("C" + String(SEQ) + "|cw key 0 time=0x" + String(millis() % 0xFFFF, HEX) + " index=" + String(CWIndex) + " client_handle=0x" + FlexRadio.handle + "\n");
-      // CWIndex++;
-      // SEQ++;
       PreviousKeying = false;
       digitalWrite(BuiltInLED, LOW);                                  // LED off
       debugln("RX");
@@ -165,18 +169,11 @@ void loop() {
     if (PreviousKeying) {
     }
     else {
-      RadioCommand="C" + String(SEQ) + "|cw key immediate 1\n";
-      RadioTCPChannel.print(RadioCommand);
-      //RadioTCPChannel.write(RadioCommand, sizeof(RadioCommand));
-      //FlexRadio.send("C" + String(SEQ) + "|cw key immediate 1\n");
+      RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 1\n";
+    //  RadioCommand="C"+ String(SEQ).trim() + "|cw key 1 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ConnectionHandle.trim() + "\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
       CWIndex++;
       SEQ++;
-      // FlexRadio.send("C" + String(SEQ) + "|cw ptt 1 time=0x" + String(millis() % 0xFFFF, HEX) + " index=" + String(CWIndex) + " client_handle=0x" + FlexRadio.handle + "\n");
-      // CWIndex++;
-      // SEQ++;
-      // FlexRadio.send("C" + String(SEQ) + "|cw key 1 time=0x" + String(millis() % 0xFFFF, HEX) + " index=" + String(CWIndex) + " client_handle=0x" + FlexRadio.handle + "\n");
-      // CWIndex++;
-      // SEQ++;
       PreviousKeying = true;
       if (ST) {
         //#ifdef AUDIOSYNT
@@ -189,6 +186,14 @@ void loop() {
       debugln("TX");
     }
   }
+
+  if ( (millis()-LastPing) > PingInterval) {
+    RadioCommand = "C" + String(SEQ).trim() + "|ping ms_timestamp=" + String(millis()).trim()+".0000\n";
+    RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+    LastPing = millis();
+    SEQ++;
+  }
+
 } //END loop()
 
 //---------------------------------------------
@@ -278,6 +283,76 @@ void send_C_tone() {                                                  // _._.
   //#endif
 }
 
+void FlexInit() {
+      RadioCommand="C1|client ip\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      RadioCommand="C2|client program YACT6000\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      RadioCommand="C3|client start_persistence 0\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C4|client bind client_ID\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C5|info\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C6|version\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C7|ant list\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C8|mic list\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C9|profile global info\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C10|profile tx info\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C11|profile mic info\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C12|profile displayinfo\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C13|sub client all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C14|sub tx all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C15|sub atu all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C16|sub amplifier all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C17|sub meter all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C18|sub pan all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C19|sub slice all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C20|sub gps all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C21|sub audio_stream all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C22|sub cwx all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C23|sub xvtr all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C24|sub memories all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C25|sub daxiq all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C26|sub dax all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C27|sub usb_cable all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C28|sub spot all\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      RadioCommand="C29|client set enforce_network_mtu=1 network_mtu=1500\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      RadioCommand="C30|client set send_reduced_bw_dax=1\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C31|client udpport 4995\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      RadioCommand="C32|stream create netcw\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C33|display panf rfgain_info 0x0\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      SEQ=34;
+  }
+
 bool connect(IPAddress IP, uint16_t Port) {
   if (RadioTCPChannel.connect(IP, Port)) {
     return true;
@@ -286,4 +361,27 @@ bool connect(IPAddress IP, uint16_t Port) {
   else {
   return false;
   }
+}
+
+String getHandler () {
+  while (RadioTCPChannel.available()) {
+    char c=RadioTCPChannel.read();
+    debug(c);
+    if (c=='H') {
+      for (unsigned int i=0;i<8;i++) {
+        if (RadioTCPChannel.available()) {
+          handle[i]=RadioTCPChannel.read();
+          debug("-->");
+          debug(handle[i]);
+        }
+        else {
+          i--;
+        }
+      }
+    handle[8]='\0';
+    debugln(handle);
+    return handle;
+    }
+  }
+
 }
