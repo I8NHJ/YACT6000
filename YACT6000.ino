@@ -49,7 +49,8 @@ EthernetClient RadioUDPChannel;
 String RadioUDPBuffer;
 EthernetUDP VITA49;
 char VITA49Buffer[UDP_TX_PACKET_MAX_SIZE];
-char handle[9];
+char MyHandle[9];
+char ClientHandle[]={"1CFA32BA"};
 
 /* GLOBAL VARIABLE DEFINITIONS */
 const int chipSelect         = BUILTIN_SDCARD;
@@ -133,7 +134,8 @@ void setup() {
   //ipAddress=RadioIP;
   //FlexRadio.connect();
 
-  ConnectionHandle=getHandler();
+  ConnectionHandle=getMyHandler();
+
   debugln(ConnectionHandle);
   FlexInit();
   send_K();
@@ -146,8 +148,8 @@ void setup() {
 void loop() {
   if (digitalRead(KeyInPin)) {                                        //It is high, I'm not transmitting
     if (PreviousKeying) {
-      RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 0\n";
-      //RadioCommand="C"+ String(SEQ).trim() + "|cw key 0 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ConnectionHandle.trim() + "\n";
+      //RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 0\n";
+      RadioCommand="C"+ String(SEQ).trim() + "|cw key 0 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ClientHandle + "\n";
       RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
       CWIndex++;
       SEQ++;
@@ -169,8 +171,8 @@ void loop() {
     if (PreviousKeying) {
     }
     else {
-      RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 1\n";
-    //  RadioCommand="C"+ String(SEQ).trim() + "|cw key 1 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ConnectionHandle.trim() + "\n";
+    //  RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 1\n";
+      RadioCommand="C"+ String(SEQ).trim() + "|cw key 1 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ClientHandle + "\n";
       RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
       CWIndex++;
       SEQ++;
@@ -284,12 +286,12 @@ void send_C_tone() {                                                  // _._.
 }
 
 void FlexInit() {
-      RadioCommand="C1|client ip\n";
+//      RadioCommand="C1|client ip\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      RadioCommand="C1|client program YACT6000\n";
       RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      RadioCommand="C2|client program YACT6000\n";
-      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      RadioCommand="C3|client start_persistence 0\n";
-      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C3|client start_persistence 0\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C4|client bind client_ID\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C5|info\n";
@@ -308,8 +310,8 @@ void FlexInit() {
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C12|profile displayinfo\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-//      RadioCommand="C13|sub client all\n";
-//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      RadioCommand="C13|sub client\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C14|sub tx all\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C15|sub atu all\n";
@@ -340,14 +342,14 @@ void FlexInit() {
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C28|sub spot all\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      RadioCommand="C29|client set enforce_network_mtu=1 network_mtu=1500\n";
-      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      RadioCommand="C30|client set send_reduced_bw_dax=1\n";
-      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C29|client set enforce_network_mtu=1 network_mtu=1500\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C30|client set send_reduced_bw_dax=1\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C31|client udpport 4995\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      RadioCommand="C32|stream create netcw\n";
-      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+//      RadioCommand="C32|stream create netcw\n";
+//      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C33|display panf rfgain_info 0x0\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
       SEQ=34;
@@ -363,24 +365,24 @@ bool connect(IPAddress IP, uint16_t Port) {
   }
 }
 
-String getHandler () {
+String getMyHandler () {
   while (RadioTCPChannel.available()) {
     char c=RadioTCPChannel.read();
     debug(c);
     if (c=='H') {
       for (unsigned int i=0;i<8;i++) {
         if (RadioTCPChannel.available()) {
-          handle[i]=RadioTCPChannel.read();
+          MyHandle[i]=RadioTCPChannel.read();
           debug("-->");
-          debug(handle[i]);
+          debug(MyHandle[i]);
         }
         else {
           i--;
         }
       }
-    handle[8]='\0';
-    debugln(handle);
-    return handle;
+    MyHandle[8]='\0';
+    debugln(MyHandle);
+    return MyHandle;
     }
   }
 
