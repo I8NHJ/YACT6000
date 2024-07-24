@@ -49,8 +49,8 @@ EthernetClient RadioUDPChannel;
 String RadioUDPBuffer;
 EthernetUDP VITA49;
 char VITA49Buffer[UDP_TX_PACKET_MAX_SIZE];
-char MyHandle[9];
-char ClientHandle[]={"1CFA32BA"};
+char MyHandle[]={"00000000"};
+String ClientHandle="00000000";
 
 /* GLOBAL VARIABLE DEFINITIONS */
 const int chipSelect         = BUILTIN_SDCARD;
@@ -288,8 +288,8 @@ void send_C_tone() {                                                  // _._.
 void FlexInit() {
 //      RadioCommand="C1|client ip\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      RadioCommand="C1|client program YACT6000\n";
-      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+  RadioCommand="C1|client program YACT6000\n";
+  RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C3|client start_persistence 0\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C4|client bind client_ID\n";
@@ -310,8 +310,9 @@ void FlexInit() {
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C12|profile displayinfo\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      RadioCommand="C13|sub client\n";
-      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+  RadioCommand="C2|sub client\n";
+  RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+  getClientHandler();
 //      RadioCommand="C14|sub tx all\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C15|sub atu all\n";
@@ -352,8 +353,8 @@ void FlexInit() {
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C33|display panf rfgain_info 0x0\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-      SEQ=34;
-  }
+  SEQ=3;
+}
 
 bool connect(IPAddress IP, uint16_t Port) {
   if (RadioTCPChannel.connect(IP, Port)) {
@@ -385,5 +386,22 @@ String getMyHandler () {
     return MyHandle;
     }
   }
+}
 
+String getClientHandler () {
+  delay (1000);
+  int index;
+  String buffer;
+  while (RadioTCPChannel.available()) {
+    buffer=RadioTCPChannel.readStringUntil('\n');
+    debugln(buffer);
+    index = buffer.indexOf(F("|client 0x"));
+    if (index>=0) {
+      debug("Index: ");
+      debugln(index);
+      ClientHandle=buffer.substring(index+10,index+18);
+    }
+  }
+  debugln(ClientHandle);
+  return ClientHandle;
 }
