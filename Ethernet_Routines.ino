@@ -3,28 +3,36 @@ void getIpAddress()
 {
   uint8_t St=0;
   // start the Ethernet connection:
-  debugln("=== Waiting for IP address");
-
+  if (TeensyDebug){
+    debugln("=== Waiting for IP address");
+  }
   teensyMAC(MyMAC);  // Get MAC address from Teensy
-  // debug("linkStatus: "); debugln(Ethernet.linkStatus());
-  // debug("hardwareStatus: "); debugln(Ethernet.hardwareStatus());
 
   TimeIt = millis();
-  while (Ethernet.begin(MyMAC, 6000) == 0)
-  {
-    if (millis() - TimeIt > 10000)  { // Ten seconds to get a DHCP served address
-      debugln("Failed to configure Ethernet using DHCP");
-      debug("link Status: "); debugln(Ethernet.linkStatus());
-      debug("hardware Status: "); debugln(Ethernet.hardwareStatus());
-      debug("socket Status: "); debugln(String(Ethernet.socketStatus(St)));
+  if (StaticIP) {
+    getFixedIpAddress();
+    Ethernet.begin(MyMAC, MyIP, MyDNS, MyGateway, MyMask);
+  }
+  else {
+    while (Ethernet.begin(MyMAC, 6000) == 0) {
+      if (millis() - TimeIt > 10000)  { // Ten seconds to get a DHCP served address
+        if (TeensyDebug) {
+          debugln("Failed to configure Ethernet using DHCP");
+          debug("link Status: "); debugln(Ethernet.linkStatus());
+          debug("hardware Status: "); debugln(Ethernet.hardwareStatus());
+          debug("socket Status: "); debugln(String(Ethernet.socketStatus(St)));
+       }
       getFixedIpAddress();
       break;
+      }
     }
   }
 
-  debug("link Status: "); debugln(Ethernet.linkStatus());
-  debug("hardware Status: "); debugln(Ethernet.hardwareStatus());
-  debug("socket Status: "); debugln(String(Ethernet.socketStatus(St)));
+  if (TeensyDebug) {
+    debug("link Status: "); debugln(Ethernet.linkStatus());
+    debug("hardware Status: "); debugln(Ethernet.hardwareStatus());
+    debug("socket Status: "); debugln(String(Ethernet.socketStatus(St)));
+  }
   MyIP = Ethernet.localIP();
   MyGateway = Ethernet.gatewayIP();
   MyMask = Ethernet.subnetMask();
@@ -39,7 +47,9 @@ void getFixedIpAddress() {
   MyDNS = {8,8,8,8};
 
   // start the Ethernet connection:
-  debugln("=== Setting fixed IP address");
+  if (TeensyDebug) {
+    debugln("=== Setting fixed IP address");
+  }
   if (Ethernet.linkStatus() == 1) {
     Ethernet.begin(MyMAC, MyIP, MyDNS, MyGateway, MyMask);
   }

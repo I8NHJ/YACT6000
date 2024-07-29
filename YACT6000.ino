@@ -1,82 +1,78 @@
-// YACT6000 - Yet Another Cw Tool for using FlexRadio 6X00/8X00 remotelly
+// MORCONI for Flex
+// MOrse COde Network Interface for 6X00 and 8X00 Flex radio series.
 // Ver 0.1 N5NHJ 4/24
 //
 
-#define DEBUG
-#ifdef DEBUG
-  #define BAUD_RATE 115200 
-  #define debug(x)                        Serial.print(x)
-  #define debugln(x)                      Serial.println(x)
-  #define debugf6(Str, A, B, C, D, E, F)  Serial.printf(Str, A, B, C, D, E, F)
-  #define debugf4(Str, A, B, C, D)        Serial.printf(Str, A, B, C, D)
-#else
-  #define debug(x)
-  #define debugln(x)
-  #define debugf6(Str, A, B, C, D, E, F)
-  #define debugf4(Str, A, B, C, D)
-#endif
+#define APP_VERSION 1.0
+
+//#define CONFIG_DEBUG
+#define debug(x)                        Serial.print(x)
+#define debugln(x)                      Serial.println(x)
+#define debugf6(Str, A, B, C, D, E, F)  Serial.printf(Str, A, B, C, D, E, F)
+#define debugf4(Str, A, B, C, D)        Serial.printf(Str, A, B, C, D)
 
 /* LIBRARIES INCLUSION */
 #include <SD.h>
 #include "NativeEthernet.h"
-#include <FlexRigTeensy.h>
-// #include <EEPROM.h>
+#include <Audio.h>
 
 /* RADIO AND PROTOCOL DEFINITIONS */
-FlexRig FlexRadio;
-#define TCP_API_PORT 4992
-#define UDP_DISCOVERING_PORT 4992
-#define UDP_TX_PACKET_MAX_SIZE_FLEX 16384	// V3 = 596, V2 = 350
-#define UDP_VITA49_PORT 4991
-#define UDP_VITA49_PACKET_MAX_SIZE 16384	// V3 = 16384, V2 = 4992
-#define RESPONSE_PACKET_LIST_SIZE 1024	// V3 = 1024, V2 = 25
+// #include <FlexRigTeensy.h>
+// FlexRig FlexRadio;
+// #define TCP_API_PORT 4992
+// #define UDP_DISCOVERING_PORT 4992
+// #define UDP_TX_PACKET_MAX_SIZE_FLEX 16384	// V3 = 596, V2 = 350
+// #define UDP_VITA49_PORT 4991
+// #define UDP_VITA49_PACKET_MAX_SIZE 16384	// V3 = 16384, V2 = 4992
+// #define RESPONSE_PACKET_LIST_SIZE 1024	// V3 = 1024, V2 = 25
 
 /* SIDETONE VARIABLE DEFINITIONS */
-//#define AUDIOSYNT                                                     //High definition audiolibrary to be used instead of the Tone function to generate Sidetone.
-//#ifdef AUDIOSYNT
-  #include <Audio.h>
-  AudioSynthWaveform SideTone;
-  AudioOutputPWM Speaker (1,2);                                        //PWM pins output for audio
-  AudioConnection patchCord0 (SideTone, Speaker);
-//#else
-//  const int Speaker            = 1;                                   //34
-//#endif
+AudioSynthWaveform SideTone;
+AudioOutputPWM Speaker (1,2);                                        //PWM pins output for audio
+AudioConnection patchCord0 (SideTone, Speaker);
 
 /* ETHERNET CHANNELS AND BUFFERS */
 EthernetClient RadioTCPChannel;
 String RadioTCPBuffer;
-EthernetClient RadioUDPChannel;
-String RadioUDPBuffer;
-EthernetUDP VITA49;
-char VITA49Buffer[UDP_TX_PACKET_MAX_SIZE];
+// EthernetClient RadioUDPChannel;
+// String RadioUDPBuffer;
+// EthernetUDP VITA49;
+// char VITA49Buffer[UDP_TX_PACKET_MAX_SIZE];
 char MyHandle[]={"00000000"};
-String ClientHandle="00000000";
+String ConnectionHandle;
+String ClientHandle="";
 
 /* GLOBAL VARIABLE DEFINITIONS */
-const int chipSelect         = BUILTIN_SDCARD;
-const int BuiltInLED         = LED_BUILTIN;
-const int KeyInPin           = 0; //33
-unsigned long CWIndex        = 1;
-unsigned long SEQ            = 1;
-String ConnectionHandle;
+const int chipSelect          = BUILTIN_SDCARD;
+const int BuiltInLED          = LED_BUILTIN;
+const int KeyInPin            = 0; //33
+unsigned long CWIndex         = 1;
+unsigned long SEQ             = 1;
 
-unsigned int PingInterval = 1000;
-unsigned long LastPing;
+/* TIMING VARIABLES */
+unsigned int PingTimeInterval = 1000;
+unsigned long LastPingTime    = 0;
+unsigned long ThisLoopTime    = 0;
 unsigned long TimeIt;
-char Rchar;
-String InBuf;
+
 String RadioCommand;
-bool PreviousKeying          = false;
-bool FlexConnected           = false;
+bool PreviousKeying           = false;
+bool FlexConnected            = false;
 
 /* SD Card parameters - Assign defaults in case some lines are missing */
+char Rchar;
+String InBuf;
 bool InSetup                  = true;
-int StartUpDelay              = 250;
-int Debounce                  = 30;
-bool ST                       = true;
-unsigned int STFreq           = 600;
+
+unsigned int StartUpDelay     = 250;
+unsigned int Debounce         = 30;
+bool SidetoneActive           = true;
+float SidetoneFrequency       = 600.0;
+float SidetoneVolume          = 0.5;
 bool StaticIP                 = false;
 unsigned int FlexPort         = 4992;
+unsigned int FlexDelay        = 3000;
+bool TeensyDebug              = false;
 uint8_t FlexIP[4]             = {0, 0, 0, 0 };
 uint8_t CfgGateway[4]         = {0, 0, 0, 0 };
 uint8_t CfgIP[4]              = {0, 0, 0, 0 };
@@ -95,111 +91,124 @@ IPAddress ipAddress;
 /* END GLOBAL VARIABLE DEFINITIONS  */
 
 void setup() {
-  #ifdef DEBUG
-  Serial.begin(BAUD_RATE);
-  while (!Serial) {               // wait for Serial Monitor 
-    if (millis() > 2000) { 
-      break;
-    }
-  }
-  #endif
-
-  //#ifdef AUDIOSYNT
-    AudioMemory (8);
-    SideTone.begin(0.0, STFreq, WAVEFORM_SINE);                                    //SINE, PULSE, SAWTOOTH, SQUARE, TRIANGLE
-  //#else
-  //  pinMode(Speaker,OUTPUT);
-  //#endif
-  
   pinMode(KeyInPin, INPUT_PULLUP);
   pinMode(BuiltInLED, OUTPUT);
   digitalWrite(BuiltInLED, HIGH);
+  
+  AudioMemory (8);
+  SideTone.begin(0.0, SidetoneFrequency, WAVEFORM_SINE);                                    //SINE, PULSE, SAWTOOTH, SQUARE, TRIANGLE
+
+  #ifdef CONFIG_DEBUG
+    OpenSerialMonitor();
+  #endif
 
   getConfigFile();
-  getIpAddress();
 
-  debugf4 ("Teensy IP: %u.%u.%u.%u\n", MyIP[0], MyIP[1], MyIP[2], MyIP[3]);
-  debugf6 ("Teensy MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", MyMAC[0], MyMAC[1], MyMAC[2], MyMAC[3], MyMAC[4], MyMAC[5]);
-  debugf4 ("Teensy MASK: %u.%u.%u.%u\n", MyMask[0], MyMask[1], MyMask[2], MyMask[3]);
-  debugf4 ("Teensy GATEWAY: %u.%u.%u.%u\n", MyGateway[0], MyGateway[1], MyGateway[2], MyGateway[3]);
-  debugf4 ("Teensy DNS: %u.%u.%u.%u\n", MyDNS[0], MyDNS[1], MyDNS[2], MyDNS[3]);
-  debugf4 ("Flex IP: %u.%u.%u.%u\n", FlexIP[0], FlexIP[1], FlexIP[2], FlexIP[3]);
-
-  while (!FlexConnected) {
-    debugln("Connecting Radio");
-    FlexConnected=connect(RadioIP, FlexPort);
-    delay(3000); //Wait 3 second if both connected or not connected yet. 
+  if (TeensyDebug) {
+    #ifndef CONFIG_DEBUG
+      OpenSerialMonitor();
+    #endif
   }
 
-  //ipAddress=RadioIP;
-  //FlexRadio.connect();
+  getIpAddress();
 
-  ConnectionHandle=getMyHandler();
+  if (TeensyDebug) {
+    debugf4 ("Teensy IP: %u.%u.%u.%u\n", MyIP[0], MyIP[1], MyIP[2], MyIP[3]);
+    debugf6 ("Teensy MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", MyMAC[0], MyMAC[1], MyMAC[2], MyMAC[3], MyMAC[4], MyMAC[5]);
+    debugf4 ("Teensy MASK: %u.%u.%u.%u\n", MyMask[0], MyMask[1], MyMask[2], MyMask[3]);
+    debugf4 ("Teensy GATEWAY: %u.%u.%u.%u\n", MyGateway[0], MyGateway[1], MyGateway[2], MyGateway[3]);
+    debugf4 ("Teensy DNS: %u.%u.%u.%u\n", MyDNS[0], MyDNS[1], MyDNS[2], MyDNS[3]);
+    debugf4 ("Flex IP: %u.%u.%u.%u\n", FlexIP[0], FlexIP[1], FlexIP[2], FlexIP[3]);
+  }
 
-  debugln(ConnectionHandle);
+  while (!FlexConnected) {                        //Retry connecting forever
+    if (TeensyDebug) {
+      debugln("Connecting Radio");
+    }
+    FlexConnected=connect(RadioIP, FlexPort);
+    if (!FlexConnected) {
+      delay(FlexDelay);                                //Timeout is set to 2s, wait 3s more before retry.
+    }
+  }
+
   FlexInit();
+
   send_K();
-  digitalWrite(BuiltInLED, LOW);
 
-  debugln("Radio connected");
-
+  if (TeensyDebug){
+    debugln("Radio connected");
+  }
 } //END setup()
 
 void loop() {
+  ThisLoopTime=millis();
   if (digitalRead(KeyInPin)) {                                        //It is high, I'm not transmitting
     if (PreviousKeying) {
-      //RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 0\n";
       RadioCommand="C"+ String(SEQ).trim() + "|cw key 0 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ClientHandle + "\n";
       RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
       CWIndex++;
       SEQ++;
       PreviousKeying = false;
       digitalWrite(BuiltInLED, LOW);                                  // LED off
-      debugln("RX");
-      if (ST) {
-        //#ifdef AUDIOSYNT
-          SideTone.amplitude(0);
-        //#else
-        //  noTone(Speaker);
-        //#endif
+      if (TeensyDebug) {
+        debugln("RX");
+      }
+      if (SidetoneActive) {
+        SideTone.amplitude(0);
       }
     }
-    else {
-    }
+//    else {
+//    }
   }
   else {                                                              //It is low, I'm transmitting
     if (PreviousKeying) {
     }
     else {
-    //  RadioCommand="C" + String(SEQ).trim() + "|cw key immediate 1\n";
       RadioCommand="C"+ String(SEQ).trim() + "|cw key 1 time=0x" + String(millis() % 0xFFFF, HEX).trim() + " index=" + String(CWIndex).trim() + " client_handle=0x" + ClientHandle + "\n";
       RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
       CWIndex++;
       SEQ++;
       PreviousKeying = true;
-      if (ST) {
-        //#ifdef AUDIOSYNT
-          SideTone.amplitude(1.0);
-        //#else
-        //  tone(Speaker,STFreq);
-        //#endif
+      if (SidetoneActive) {
+        SideTone.amplitude(SidetoneVolume);
       } 
       digitalWrite(BuiltInLED, HIGH);                                 // LED on
-      debugln("TX");
+      if (TeensyDebug) {
+        debugln("TX");
+      }
     }
   }
-
-  if ( (millis()-LastPing) > PingInterval) {
-    RadioCommand = "C" + String(SEQ).trim() + "|ping ms_timestamp=" + String(millis()).trim()+".0000\n";
-    RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-    LastPing = millis();
-    SEQ++;
+  if (RadioTCPChannel.connected()) {
+    if ( (ThisLoopTime-LastPingTime) > PingTimeInterval) {
+      LastPingTime = ThisLoopTime;
+      RadioCommand = "C" + String(SEQ).trim() + "|ping ms_timestamp=" + String(millis()).trim()+".0000\n";
+      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+      SEQ++;
+    }
   }
+  else {
+    RadioTCPChannel.stop();
+    digitalWrite(BuiltInLED, HIGH);
+    debugln("Radio disconnected");
+    FlexConnected=false;
+    ClientHandle="";
 
+    while (!FlexConnected) { 
+      if (TeensyDebug) {                       //Retry connecting forever
+        debugln("Connecting Radio");
+      }
+      FlexConnected=connect(RadioIP, FlexPort);
+      if (!FlexConnected) {
+        delay(FlexDelay);                           
+      }
+    }
+    FlexInit();
+    send_K();
+  }
 } //END loop()
 
 //---------------------------------------------
-// Element (dot) length = 60000 (milliseconds in a minute) / (50 (elements of the world PARIS) * Speed (word per minute))
+// Element (dot or space) length = 60000 (milliseconds in a minute) / (50 (elements of the world PARIS) * Speed (word per minute))
 // @20WMP: 60000 / (50*20) = 60ms
 // @30WPM: 60000 / (50*30) = 40ms
 // @40WPM: 60000 / (50*40) = 30ms
@@ -219,52 +228,27 @@ void send_word_space (int speed){
 
 }
 
-void send_K() {                                                       // _._ at speed of 40WPM
-  //#ifdef AUDIOSYNT
-    SideTone.frequency(600.0);
-    SideTone.amplitude(1.0);
-  //#else
-  //  tone (Speaker, 600);
-  //#endif
+void send_K() {                                                  // _._ at speed of 40WPM
+  SideTone.frequency(600.0);
+
+  SideTone.amplitude(SidetoneVolume);
   delay (90);
-
-  //#ifdef AUDIOSYNT
-    SideTone.amplitude(0.0);
-  //#else
-  //  noTone(Speaker);
-  //#endif
+  SideTone.amplitude(0.0);
   delay (30);
-
-  //#ifdef AUDIOSYNT
-    SideTone.amplitude(1.0);
-  //#else
-  //  tone (Speaker, 600);
-  //#endif
+  SideTone.amplitude(SidetoneVolume);
   delay (30);
-
-  //#ifdef AUDIOSYNT
-    SideTone.amplitude(0.0);
-  //#else
-  //  noTone(Speaker);
-  //#endif
+  SideTone.amplitude(0.0);
   delay (30);
-
-  //#ifdef AUDIOSYNT
-    SideTone.amplitude(1.0);
-  //#else
-  //  tone (Speaker, 600);
-  //#endif
+  SideTone.amplitude(SidetoneVolume);
   delay (90);
+  SideTone.amplitude(0.0);
 
-  //#ifdef AUDIOSYNT
-    SideTone.amplitude(0);
-    SideTone.frequency(STFreq);
-  //#else
-  //  noTone(Speaker);
-  //#endif
+  SideTone.frequency(SidetoneFrequency);
   }
 
-void send_C_tone() {                                                  // _._.
+void send_C() {                                                  // _._.
+    SideTone.frequency(600.0);
+    SideTone.amplitude(SidetoneVolume);
   //#ifdef AUDIOSYNT
   //#else
   //  tone (Speaker, 600);
@@ -286,6 +270,7 @@ void send_C_tone() {                                                  // _._.
 }
 
 void FlexInit() {
+        ConnectionHandle=getMyHandler();
 //      RadioCommand="C1|client ip\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
   RadioCommand="C1|client program YACT6000\n";
@@ -310,9 +295,14 @@ void FlexInit() {
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C12|profile displayinfo\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-  RadioCommand="C2|sub client\n";
-  RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
-  getClientHandler();
+  while (ClientHandle=="") {
+    if (TeensyDebug) {
+      debugln("Waiting for SMARTSdr");
+    }
+    RadioCommand="C2|sub client\n";
+    RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+    getClientHandler();
+  }
 //      RadioCommand="C14|sub tx all\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C15|sub atu all\n";
@@ -353,20 +343,21 @@ void FlexInit() {
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
 //      RadioCommand="C33|display panf rfgain_info 0x0\n";
 //      RadioTCPChannel.write(RadioCommand.c_str(), RadioCommand.length());
+  digitalWrite(BuiltInLED, LOW);
   SEQ=3;
 }
 
 bool connect(IPAddress IP, uint16_t Port) {
-  if (RadioTCPChannel.connect(IP, Port)) {
+  if (RadioTCPChannel.connect(IP, Port, 2000)) {
     return true;
-    digitalWrite(BuiltInLED, LOW);
   }
   else {
-  return false;
+    return false;
   }
 }
 
 String getMyHandler () {
+  delay (3000);
   while (RadioTCPChannel.available()) {
     char c=RadioTCPChannel.read();
     debug(c);
@@ -374,8 +365,6 @@ String getMyHandler () {
       for (unsigned int i=0;i<8;i++) {
         if (RadioTCPChannel.available()) {
           MyHandle[i]=RadioTCPChannel.read();
-          debug("-->");
-          debug(MyHandle[i]);
         }
         else {
           i--;
@@ -389,19 +378,36 @@ String getMyHandler () {
 }
 
 String getClientHandler () {
-  delay (1000);
+  delay (FlexDelay);                           //Give some time to the radio to sync
   int index;
   String buffer;
   while (RadioTCPChannel.available()) {
     buffer=RadioTCPChannel.readStringUntil('\n');
-    debugln(buffer);
+    if (TeensyDebug) {
+      debugln(buffer);
+    }
     index = buffer.indexOf(F("|client 0x"));
     if (index>=0) {
-      debug("Index: ");
-      debugln(index);
+      if (TeensyDebug) {
+        debug("Index: ");
+        debugln(index);
+      }
       ClientHandle=buffer.substring(index+10,index+18);
     }
   }
   debugln(ClientHandle);
   return ClientHandle;
+}
+
+void OpenSerialMonitor() {
+  Serial.begin(115200);
+  while (!Serial) { 
+    if (millis() > 2000) { 
+      break;
+    } 
+  }
+  Serial.print(F("MORCONI for Flex 6/8X00 series radios V."));
+  Serial.print((APP_VERSION));
+  Serial.println(F(" by N5NHJ"));
+  Serial.println(F("----------------------"));
 }
